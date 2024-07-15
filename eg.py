@@ -1,2 +1,0 @@
-string = '/home/file'
-
