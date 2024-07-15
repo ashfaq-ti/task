@@ -1,0 +1,8 @@
+# Ignore the env directory
+env/
+
+# Other ignores
+node_modules/
+dist/
+__pycache__/
+*.log
