@@ -1,5 +1,7 @@
 import pandas as pd
 
-df = pd.read_csv('result.csv')
+df = pd.read_csv('uuid_url.csv')
 
-print(len(df.iloc[21,0]))
+df.set_index('uuid',inplace=True)
+
+print(df.loc['1488bfc2-8812-4da4-8b88-345f2401546c'])

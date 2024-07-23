@@ -4,6 +4,7 @@ import requests
 from urllib.parse import urlparse
 import os
 import re
+import uuid
 
 def clean_text(text):
     # Remove leading and trailing spaces from each line
@@ -36,7 +37,7 @@ def download_pdf(url):
         return None
 
 
-def extract_and_save(pdf_file_name):
+def extract_and_save(pdf_file_name,uuid):
     # Read PDF content
     pdf_text = ""
 
@@ -65,32 +66,45 @@ def extract_and_save(pdf_file_name):
             text_chunks.append(pdf_text[string_start_index:string_end_index])
             string_start_index = string_end_index
             string_end_index = string_start_index + 1024
-        
+
     if string_start_index < length_of_pdf_text < string_end_index:
         text_chunks.append(pdf_text[string_end_index:])
-    
-        
+
+
     try:
         df = pd.read_csv('result.csv')
         new_df = pd.DataFrame.from_dict({
-            'text_data' : text_chunks,
-            'id' : [pdf_file_name] * len(text_chunks)
+            'uuid' : [uuid] * len(text_chunks),
+            'text_data': text_chunks
         })
         df = pd.concat([df,new_df],ignore_index=True)
         df.to_csv('result.csv',index=None)
 
     except:
         df = pd.DataFrame.from_dict({
-            'text_data' : text_chunks,
-            'id' : [pdf_file_name]*len(text_chunks)
+            'uuid' : [uuid]*len(text_chunks),
+            'text_data': text_chunks
         })
         df.to_csv('result.csv',index=None)
-    
+
 
 
 
 df = pd.read_excel("table.xlsx")
 
-for url in df["URL"]:
+#create a uuids CSV for easier and faster lookup
+
+uuids = [str(uuid.uuid4()) for _ in range(len(df["URL"]))]
+uuids_df = pd.DataFrame.from_dict({
+    'uuid' : uuids,
+    'URL' : df["URL"]
+})
+uuids_df.set_index('uuid',inplace=True)
+file_names = []
+for index,url in enumerate(df["URL"]):
     file_name = download_pdf(url)
-    extract_and_save(file_name)
+    file_names.append(file_name)
+    extract_and_save(file_name,uuids[index])
+
+uuids_df.insert(0,'file_name',file_names)
+uuids_df.to_csv('uuid_url.csv')
