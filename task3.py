@@ -1,10 +1,23 @@
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 from PyPDF2 import PdfReader
-import csv
 import pandas as pd
 import requests
 from urllib.parse import urlparse
 import os
+import re
+
+def clean_text(text):
+    # Remove leading and trailing spaces from each line
+    text = "\n".join(line.strip() for line in text.splitlines())
+
+    # Replace multiple spaces between words with a single space
+    text = re.sub(r"\s+", " ", text)
+
+    # Remove extra empty lines
+    text = re.sub(r"\n\s*\n", "\n", text)
+
+    return text.strip()
+
+
 def download_pdf(url):
     response = requests.get(url)
     # Check if the request was successful
@@ -24,58 +37,60 @@ def download_pdf(url):
 
 
 def extract_and_save(pdf_file_name):
-    # Function to read PDF content
-    def read_pdf(pdf_file_name):
-        with open(pdf_file_name, 'rb') as file:
-            reader = PdfReader(file)
-            text = ''
-            for page_num in range(len(reader.pages)):
-                page = reader.pages[page_num]
-                text += page.extract_text()
-            return text
+    # Read PDF content
+    pdf_text = ""
 
-    # Path to the PDF file
-    # file_path = '/home/technoidentity/Downloads/pdf2.pdf'
+    with open(pdf_file_name, "rb") as file:
+        reader = PdfReader(file)
+        for page_num in range(len(reader.pages)):
+            page = reader.pages[page_num]
+            pdf_text += page.extract_text()
+    pdf_text = clean_text(pdf_text)
+    print('--------------------------------------------------------------------------------------------------------------------------------------------------')
 
-    # Read the PDF content
-    pdf_text = read_pdf(pdf_file_name)
+    text_chunks = []
+    string_start_index = 0
+    string_end_index = 1024
+    length_of_pdf_text = len(pdf_text)
 
-    # Initialize the text splitter
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1024,
-        chunk_overlap=0,
-    )
+    while string_end_index < length_of_pdf_text:
+        while pdf_text[string_end_index] != ' ':
+            if string_end_index <= string_start_index:
+                text_chunks.append(pdf_text[string_start_index:string_start_index+1024])
+                string_start_index += 1024
+                string_end_index = string_start_index + 1024
+                break
+            string_end_index -= 1
+        else:
+            text_chunks.append(pdf_text[string_start_index:string_end_index])
+            string_start_index = string_end_index
+            string_end_index = string_start_index + 1024
+        
+    if string_start_index < length_of_pdf_text < string_end_index:
+        text_chunks.append(pdf_text[string_end_index:])
+    
+        
+    try:
+        df = pd.read_csv('result.csv')
+        new_df = pd.DataFrame.from_dict({
+            'text_data' : text_chunks,
+            'id' : [pdf_file_name] * len(text_chunks)
+        })
+        df = pd.concat([df,new_df],ignore_index=True)
+        df.to_csv('result.csv',index=None)
 
-    # Split the PDF content into chunks
-    split_text = splitter.create_documents([pdf_text])
+    except:
+        df = pd.DataFrame.from_dict({
+            'text_data' : text_chunks,
+            'id' : [pdf_file_name]*len(text_chunks)
+        })
+        df.to_csv('result.csv',index=None)
+    
 
-    csv_file_name = pdf_file_name + '.csv'
 
-    # write header rows in csv
-    with open(csv_file_name,'w',newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(['text_data'])
 
-    # Display the chunks
-    for chunk in split_text:
-        chunk.metadata['file'] = pdf_file_name
-        text = chunk.page_content + ""
-        # print(len(text))
-        new_text = ''
-        for line in text.split('\n'):
-            # remove excess whitespace from beginning and end
-            line = line.strip()
-            #ignore empty lines
-            if line:
-                new_text += line
-        with open(csv_file_name,'a',newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow([new_text])
+df = pd.read_excel("table.xlsx")
 
-df = pd.read_excel('table.xlsx')
-
-for url in df['URL']:
+for url in df["URL"]:
     file_name = download_pdf(url)
     extract_and_save(file_name)
-
-
